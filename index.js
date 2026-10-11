@@ -67,6 +67,7 @@ function Physics (mcData, world) {
     sprintSpeed: 0.3,
     minorCollisionAngle: Math.fround(0.13962634), // LocalPlayer.MINOR_COLLISION_ANGLE_THRESHOLD_RADIAN (8 degrees)
     sneakSpeed: 0.3,
+    usingItemSpeed: 0.2,
     stepHeight: 0.6, // how much height can the bot step on without jump
     negligeableVelocity: 0.003, // actually 0.005 for 1.8, but seems fine
     soulsandSpeed: 0.4,
@@ -488,8 +489,9 @@ function Physics (mcData, world) {
     return angle < physics.minorCollisionAngle
   }
 
-  // LocalPlayer.aiStep: the sprint key only starts a sprint with forward input and while not sneaking; a
-  // sprint stops when the forward input ends, when sneaking (before 1.14: forward impulse below 0.8), or
+  // LocalPlayer.aiStep: the sprint key only starts a sprint with forward input and while neither sneaking
+  // nor using an item; a sprint stops when the forward input ends, when sneaking (before 1.14: forward
+  // impulse below 0.8), when using an item (its 0.2 input scale leaves the impulse below 0.8), or
   // after the previous tick's move hit something horizontally (a minor brush against a wall no longer
   // counts since 1.18). A held key starts the sprint again on the next tick that allows it. One
   // deliberate difference: the client keeps sprinting after the key is released until the forward input
@@ -500,12 +502,12 @@ function Physics (mcData, world) {
       entity.isSprinting = false
       return
     }
-    if (!entity.isSprinting && entity.control.sprint && hasForwardImpulse && !entity.control.sneak) {
+    if (!entity.isSprinting && entity.control.sprint && hasForwardImpulse && !entity.control.sneak && !entity.isUsingItem) {
       entity.isSprinting = true
     }
     if (entity.isSprinting) {
       const collided = entity.isCollidedHorizontally && !(sprintSurvivesMinorCollision && entity.minorHorizontalCollision)
-      if (!hasForwardImpulse || collided || (sneakStopsSprinting && entity.control.sneak)) entity.isSprinting = false
+      if (!hasForwardImpulse || collided || (sneakStopsSprinting && entity.control.sneak) || entity.isUsingItem) entity.isSprinting = false
     }
   }
 
@@ -883,6 +885,11 @@ function Physics (mcData, world) {
       strafe *= physics.sneakSpeed
       forward *= physics.sneakSpeed
     }
+    // LocalPlayer.aiStep: using an item (a raised shield, a drawn bow, eating) scales the input to 0.2.
+    if (entity.isUsingItem) {
+      strafe *= physics.usingItemSpeed
+      forward *= physics.usingItemSpeed
+    }
     entity.inputStrafe = strafe
     entity.inputForward = forward
 
@@ -971,6 +978,8 @@ class PlayerState {
     this.yaw = bot.entity.yaw
     this.pitch = bot.entity.pitch
     this.control = control
+    // mineflayer sets usingHeldItem from activateItem() to deactivateItem() (either hand).
+    this.isUsingItem = bot.usingHeldItem ?? false
 
     // effects
     const effects = bot.entity.effects

@@ -296,4 +296,23 @@ describe('Sprint state', () => {
       expect(player.entity.isSprinting).toBe(!stops)
     }
   })
+
+  // LocalPlayer.aiStep scales the input to 0.2 while an item is in use (a raised shield, a drawn bow,
+  // eating) and won't sprint; mineflayer reports the use as bot.usingHeldItem
+  it('walks at a fifth of the speed and does not sprint while using an item', () => {
+    const { data, world } = makeWorld('26.1', () => false)
+    const physics = Physics(data, world)
+    const walk = (using, controls) => {
+      const player = makePlayer('26.1', new Vec3(0.5, 60, 0.5))
+      player.usingHeldItem = using
+      for (let i = 0; i < 40; i++) tick(physics, world, player, controls)
+      return { dist: player.entity.position.z - 0.5, sprinting: player.entity.isSprinting }
+    }
+    const free = walk(false, { forward: true })
+    const using = walk(true, { forward: true })
+    expect(using.dist / free.dist).toBeCloseTo(0.2, 2)
+    const sprint = walk(true, { forward: true, sprint: true })
+    expect(sprint.sprinting).toBe(false)
+    expect(sprint.dist).toBeCloseTo(using.dist, 5)
+  })
 })
